@@ -31,6 +31,7 @@ class Layer(object):
             self._trainable = kwargs['trainable']
         if not hasattr(self, 'params'):
             self.params = []
+        self.name = None
 
     def set_previous(self, layer, connection_map={}):
         assert self.nb_input == layer.nb_output == 1, "Cannot connect layers: input count and output count should be 1."
@@ -180,6 +181,7 @@ class Layer(object):
         return self.params, regularizers, consts, updates
 
     def set_name(self, name):
+        self.name = name
         for i in range(len(self.params)):
             self.params[i].name = '%s_p%d' % (name, i)
 
@@ -288,7 +290,7 @@ class Merge(Layer):
         if len(layers) < 2:
             raise Exception("Please specify two or more input layers (or containers) to merge")
 
-        if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot'}:
+        if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot', 'join_att'}:
             raise Exception("Invalid merge mode: " + str(mode))
 
         if mode in {'sum', 'mul', 'ave', 'cos'}:
@@ -362,6 +364,8 @@ class Merge(Layer):
             return tuple(output_shape)
         elif self.mode == 'join':
             return None
+        elif self.mode == 'join_att':
+            return (input_shapes[0][0],input_shapes[1][1],input_shapes[0][2])
         elif self.mode == 'dot':
             shape1 = list(input_shapes[0])
             shape2 = list(input_shapes[1])
@@ -393,14 +397,14 @@ class Merge(Layer):
         elif self.mode == 'concat':
             inputs = [self.layers[i].get_output(train) for i in range(len(self.layers))]
             return T.concatenate(inputs, axis=self.concat_axis)
-        elif self.mode == 'join':
+        elif self.mode == 'join' or self.mode == 'join_att':
             inputs = OrderedDict()
             for i in range(len(self.layers)):
                 X = self.layers[i].get_output(train)
-                if X.name is None:
+                if self.layers[i].name is None:
                     raise ValueError("merge_mode='join' only works with named inputs")
                 else:
-                    inputs[X.name] = X
+                    inputs[self.layers[i].name] = X
             return inputs
         elif self.mode == 'mul':
             s = self.layers[0].get_output(train)
