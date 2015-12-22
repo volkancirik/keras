@@ -15,7 +15,10 @@ from ..layers.recurrent import SimpleRNN, SimpleDeepRNN, GRU, LSTM, JZS1, JZS2, 
 from ..layers import containers
 from .. import regularizers
 from .. import constraints
-
+###
+from ..layers.recurrentpp_aggregate import LSTMsum, LSTMmul, LSTMpp
+from ..layers.recurrentpp_soft import LSTMbase_soft, LSTMpp_soft
+from ..layers.attention import *
 
 def container_from_config(original_layer_dict, custom_objects={}):
     layer_dict = copy.deepcopy(original_layer_dict)
