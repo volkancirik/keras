@@ -128,7 +128,7 @@ class LSTM_maxout(Recurrent):
 
 class LSTM_maxout_proj(Recurrent):
 	'''
-	soft selection of gates
+	soft selection of gates with a layer of projection
 	'''
 	def __init__(self, output_dim,
 				 init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
@@ -177,7 +177,6 @@ class LSTM_maxout_proj(Recurrent):
 		self.b_o = shared_zeros((self.output_dim))
 
 		self.params = [
-#			self.W_maxout, self.b_maxout,
 			self.W_maxout_1, self.W_maxout_2, self.b_maxout,
 			self.W_g, self.U_g, self.b_g,
 			self.W_c, self.U_c, self.b_c,
@@ -188,7 +187,6 @@ class LSTM_maxout_proj(Recurrent):
 			self.set_weights(self.initial_weights)
 			del self.initial_weights
 
-#	def _step(self,xg_t, xo_t, xc_t, mask_tm1,h_tm1, c_tm1, u_g, u_o, u_c, w_maxout, b_maxout):
 	def _step(self,xg_t, xo_t, xc_t, mask_tm1,h_tm1, c_tm1, u_g, u_o, u_c, w_maxout_1,w_maxout_2, b_maxout):
 
 		h_mask_tm1 = mask_tm1 * h_tm1
@@ -197,10 +195,6 @@ class LSTM_maxout_proj(Recurrent):
 		gate = T.nnet.softmax(act.reshape((-1, act.shape[-1]))).reshape(act.shape)
 
 		c_tilda = self.activation(xc_t + T.dot(h_mask_tm1, u_c))
-#		ops = [c_mask_tm1,c_tilda]
-#		y = T.as_tensor_variable( ops, name='y')
-#		yshuff = T.max(T.dot(y.dimshuffle(1,2,0), w_maxout.dimshuffle(1,0,2)) + b_maxout, axis = 3)
-
 		yshuff = T.max(T.dot(c_tilda, w_maxout_1) + T.dot(c_mask_tm1, w_maxout_2) + b_maxout,axis = 3).dimshuffle(0,2,1)
 
 		c_t = (gate.reshape((-1,gate.shape[-1])) * yshuff.reshape((-1,yshuff.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2])

@@ -89,14 +89,15 @@ class TimeDistributedAttention(Recurrent):
 	Attention Layer to produce timedistributed representations out of many candidates  (n_instances x n_feature_maps or timesteps x dimesion) --> n_instances x timesteps x dimension
 	'''
 	def __init__(self,init='glorot_uniform', weights=None, truncate_gradient=-1, return_sequences=False,
-				 go_backwards=False, att_dim = None, prev_dim = None, prev_context = True, **kwargs): ###
+				 go_backwards=False, enc_dim = None, att_dim = None, prev_dim = None, prev_context = True, **kwargs): ###
 		self.init = initializations.get(init)
 		self.truncate_gradient = truncate_gradient
 		self.return_sequences = return_sequences
 		self.initial_weights = weights
 		self.go_backwards = go_backwards
 		self.att_dim = att_dim
-		self.prev_dim = prev_dim                                  # use previous attented representation for attention function
+		self.prev_dim = prev_dim
+		self.enc_dim = enc_dim
 		self.prev_context = prev_context
 
 		super(TimeDistributedAttention, self).__init__(**kwargs)
@@ -167,6 +168,7 @@ class TimeDistributedAttention(Recurrent):
 				  "enc_dim": self.enc_dim,
 				  "att_dim": self.att_dim,
 				  "prev_dim": self.prev_dim,
+				  "prev_context": self.prev_context,
 				  "init": self.init.__name__,
 				  "truncate_gradient": self.truncate_gradient,
 				  "return_sequences": self.return_sequences,
@@ -180,7 +182,7 @@ class PointerPrediction(Recurrent):
 	Prediction based on Attention
 	'''
 	def __init__(self,init='glorot_uniform', weights=None, truncate_gradient=-1, return_sequences=False,
-				 go_backwards=False, att_dim = None, prev_dim = None, prev_context = True, **kwargs): ###
+				 go_backwards=False, att_dim = None, prev_dim = None, prev_context = False, **kwargs): ###
 		self.init = initializations.get(init)
 		self.truncate_gradient = truncate_gradient
 		self.return_sequences = return_sequences
@@ -195,7 +197,6 @@ class PointerPrediction(Recurrent):
 	def build(self):
 		self.input = T.tensor3()
 		self.enc_dim = self.input_shape[2]
-		self.output_dim = self.enc_dim
 
 		self.W_x2a = self.init((self.prev_dim, self.att_dim))     # x_t -> activation
 		self.W_e2a = self.init((self.enc_dim, self.att_dim))      # context candidate -> activation
@@ -277,10 +278,9 @@ class PointerPrediction(Recurrent):
 
 	def get_config(self):
 		config = {"name": self.__class__.__name__,
-				  "output_dim": self.output_dim,
-				  "enc_dim": self.enc_dim,
 				  "att_dim": self.att_dim,
 				  "prev_dim": self.prev_dim,
+				  "prev_context": self.prev_context,
 				  "init": self.init.__name__,
 				  "truncate_gradient": self.truncate_gradient,
 				  "return_sequences": self.return_sequences,
