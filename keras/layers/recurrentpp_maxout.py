@@ -18,7 +18,7 @@ class LSTM_maxout(Recurrent):
 				 init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
 				 activation='tanh', inner_activation='hard_sigmoid',
 				 weights=None, truncate_gradient=-1, return_sequences=False,
-				 input_dim=None, input_length=None,n_pieces = 2, n_opt = 3, **kwargs):
+				 input_dim=None, input_length=None,n_pieces = 2, n_opt = 2, **kwargs):
 		self.output_dim = output_dim
 		self.init = initializations.get(init)
 		self.inner_init = initializations.get(inner_init)
@@ -104,8 +104,6 @@ class LSTM_maxout(Recurrent):
 			non_sequences=[self.U_g, self.U_o, self.U_c, self.W_maxout, self.b_maxout],
 			truncate_gradient=self.truncate_gradient)
 
-
-
 		if self.return_sequences:
 			return outputs.dimshuffle((1, 0, 2))
 		return outputs[-1]
@@ -121,7 +119,10 @@ class LSTM_maxout(Recurrent):
 				  "truncate_gradient": self.truncate_gradient,
 				  "return_sequences": self.return_sequences,
 				  "input_dim": self.input_dim,
-				  "input_length": self.input_length}
+				  "input_length": self.input_length,
+				  "n_opt" : self.n_opt,
+				  "n_pieces" : self.n_pieces
+			  }
 		base_config = super(LSTM_maxout, self).get_config()
 		return dict(list(base_config.items()) + list(config.items()))
 
@@ -134,7 +135,7 @@ class LSTM_maxout_proj(Recurrent):
 				 init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
 				 activation='tanh', inner_activation='hard_sigmoid',
 				 weights=None, truncate_gradient=-1, return_sequences=False,
-				 input_dim=None, input_length=None,n_pieces = 2, n_opt = 3, **kwargs):
+				 input_dim=None, input_length=None,n_pieces = 2, n_opt = 2, **kwargs):
 		self.output_dim = output_dim
 		self.init = initializations.get(init)
 		self.inner_init = initializations.get(inner_init)
@@ -238,7 +239,10 @@ class LSTM_maxout_proj(Recurrent):
 				  "truncate_gradient": self.truncate_gradient,
 				  "return_sequences": self.return_sequences,
 				  "input_dim": self.input_dim,
-				  "input_length": self.input_length}
+				  "input_length": self.input_length,
+				  "n_opt" : self.n_opt,
+				  "n_pieces" : self.n_pieces
+			  }
 		base_config = super(LSTM_maxout_proj, self).get_config()
 		return dict(list(base_config.items()) + list(config.items()))
 
@@ -343,6 +347,9 @@ class RNN_maxout(Recurrent):
 				  "return_sequences": self.return_sequences,
 				  "input_dim": self.input_dim,
 				  "input_length": self.input_length,
-				  "go_backwards": self.go_backwards}
+				  "go_backwards": self.go_backwards,
+				  "n_opt" : self.n_opt,
+				  "n_pieces" : self.n_pieces
+		}
 		base_config = super(RNN_maxout, self).get_config()
 		return dict(list(base_config.items()) + list(config.items()))
