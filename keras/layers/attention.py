@@ -89,7 +89,7 @@ class TimeDistributedAttention(Recurrent):
 	Attention Layer to produce timedistributed representations out of many candidates  (n_instances x n_feature_maps or timesteps x dimesion) --> n_instances x timesteps x dimension
 	'''
 	def __init__(self,init='glorot_uniform', weights=None, truncate_gradient=-1, return_sequences=False,
-				 go_backwards=False, enc_dim = None, att_dim = None, prev_dim = None, prev_context = True, **kwargs): ###
+				 go_backwards=False, output_dim = None, enc_dim = None, att_dim = None, prev_dim = None, prev_context = True, enc_name = 'encoder_context', rec_name = 'recurrent_context', **kwargs): ###
 		self.init = initializations.get(init)
 		self.truncate_gradient = truncate_gradient
 		self.return_sequences = return_sequences
@@ -99,6 +99,9 @@ class TimeDistributedAttention(Recurrent):
 		self.prev_dim = prev_dim
 		self.enc_dim = enc_dim
 		self.prev_context = prev_context
+		###
+		self.enc_name = enc_name
+		self.rec_name = rec_name
 
 		super(TimeDistributedAttention, self).__init__(**kwargs)
 
@@ -140,9 +143,15 @@ class TimeDistributedAttention(Recurrent):
 	def get_output(self, train = False, get_tuple = False):
 
 		input_dict = self.get_input(train)
-		X_encoder = input_dict['encoder_context']
+		###
+#		X_encoder = input_dict['encoder_context']
+		X_encoder = input_dict[self.enc_name]
+
 		X_encoder = X_encoder.reshape((X_encoder.shape[0],X_encoder.shape[1],-1))
-		X = input_dict['recurrent_context']
+
+		###
+#		X = input_dict['recurrent_context']
+		X = input_dict[self.rec_name]
 		X = X.dimshuffle((1, 0, 2))
 
 		attention_encoder = T.dot(X_encoder,self.W_e2a)
@@ -164,11 +173,14 @@ class TimeDistributedAttention(Recurrent):
 
 	def get_config(self):
 		config = {"name": self.__class__.__name__,
-				  "output_dim": self.output_dim,
+				  "output_dim": self.enc_dim,
 				  "enc_dim": self.enc_dim,
 				  "att_dim": self.att_dim,
 				  "prev_dim": self.prev_dim,
 				  "prev_context": self.prev_context,
+###
+				  "enc_name" : self.enc_name,
+				  "rec_name" : self.rec_name,
 				  "init": self.init.__name__,
 				  "truncate_gradient": self.truncate_gradient,
 				  "return_sequences": self.return_sequences,

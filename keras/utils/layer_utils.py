@@ -17,8 +17,10 @@ from .. import regularizers
 from .. import constraints
 ###
 from ..layers.recurrentpp_aggregate import LSTMsum, LSTMmul, LSTMpp
-from ..layers.recurrentpp_soft import LSTMbase_soft, LSTMpp_soft
+from ..layers.recurrentpp_soft import LSTMbase_soft, LSTMpp_soft, LSTMkernel_soft
+from ..layers.recurrentpp_maxout import LSTM_maxout
 from ..layers.attention import *
+from ..layers.recurrent_experts import ExpertI, ExpertII, ExpertIIgated
 
 def container_from_config(original_layer_dict, custom_objects={}):
     layer_dict = copy.deepcopy(original_layer_dict)

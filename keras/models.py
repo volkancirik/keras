@@ -281,7 +281,6 @@ class Model(object):
 		for batch_index, (batch_start, batch_end) in enumerate(batches):
 			batch_ids = index_array[batch_start:batch_end]
 			ins_batch = slice_X(ins, batch_ids)
-
 			batch_outs = f(*ins_batch)
 			if type(batch_outs) == list:
 				if batch_index == 0:
@@ -579,7 +578,7 @@ class Sequential(Model, containers.Sequential):
 			for n, param in enumerate(weights):
 				param_name = 'param_{}'.format(n)
 				n_parameters += reduce(lambda x,y: x*y, param.shape)
-#				print(param.shape)
+				#print(param.shape)
 		return n_parameters
 
 class Graph(Model, containers.Graph):
@@ -744,6 +743,22 @@ class Graph(Model, containers.Graph):
 #			print(param.shape)
 		return n_parameters
 
+	def dump_params(self, filepath):
+		import numpy as np
+
+		f = open(filepath, 'w')
+
+		weights = self.get_weights()
+		n_parameters = 0
+		for n, param in enumerate(weights):
+			param_name = 'param_{}'.format(n)
+			f.write(param_name + " " + str(param.shape))
+			f.write('\n')
+			print(param_name,param.shape,param.dtype) 
+			np.savetxt(f,param, fmt='%-7.2f')
+			f.write("_"*10)
+			f.write('\n')
+		f.close()
 
 	def load_weights(self, filepath):
 		# Loads weights from HDF5 file
