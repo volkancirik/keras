@@ -85,6 +85,25 @@ class LSTM_maxout(Recurrent):
 		h_t = o_t * self.activation(c_t)
 		return h_t, c_t
 
+	def _debug_step(self,xg_t, xo_t, xc_t, mask_tm1,h_tm1, c_tm1, g_tm1, u_g, u_o, u_c, w_maxout, b_maxout):
+
+		h_mask_tm1 = mask_tm1 * h_tm1
+		c_mask_tm1 = mask_tm1 * c_tm1
+		act = T.tensordot( xg_t + h_mask_tm1, u_g , [[1],[2]])
+		gate = T.nnet.softmax(act.reshape((-1, act.shape[-1]))).reshape(act.shape)
+
+		c_tilda = self.activation(xc_t + T.dot(h_mask_tm1, u_c))
+		ops = [c_mask_tm1,c_tilda]
+		y = T.as_tensor_variable( ops, name='y')
+		yshuff = T.max(T.dot(y.dimshuffle(1,2,0), w_maxout) + b_maxout, axis = 3)
+
+		c_t = (gate.reshape((-1,gate.shape[-1])) * yshuff.reshape((-1,yshuff.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2])
+		o_t = self.inner_activation(xo_t + T.dot(h_mask_tm1, u_o))
+		h_t = o_t * self.activation(c_t)
+		gates_t = gate
+		return h_t, c_t, gates_t
+
+
 	def get_output(self, train=False):
 		X = self.get_input(train)
 		padded_mask = self.get_padded_shuffled_mask(train, X, pad=1)
@@ -107,6 +126,29 @@ class LSTM_maxout(Recurrent):
 		if self.return_sequences:
 			return outputs.dimshuffle((1, 0, 2))
 		return outputs[-1]
+
+	def get_gates(self, train=False):
+		X = self.get_input(train)
+		padded_mask = self.get_padded_shuffled_mask(train, X, pad=1)
+		X = X.dimshuffle((1, 0, 2))
+
+		xg = T.dot(X, self.W_g) + self.b_g
+		xc = T.dot(X, self.W_c) + self.b_c
+		xo = T.dot(X, self.W_o) + self.b_o
+
+		[outputs, memories, gates], updates = theano.scan(
+			self._debug_step,
+			sequences=[xg, xo, xc, padded_mask],
+			outputs_info=[
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim, self.n_opt), 1)
+			],
+			non_sequences=[self.U_g, self.U_o, self.U_c, self.W_maxout, self.b_maxout],
+			truncate_gradient=self.truncate_gradient)
+
+		return outputs, gates, memories
+
 
 	def get_config(self):
 		config = {"name": self.__class__.__name__,

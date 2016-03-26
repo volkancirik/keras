@@ -290,7 +290,7 @@ class Merge(Layer):
 		if len(layers) < 2:
 			raise Exception("Please specify two or more input layers (or containers) to merge")
 
-		if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot', 'join_att'}:
+		if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot', 'join_att', 'join_dec'}:
 			raise Exception("Invalid merge mode: " + str(mode))
 
 		if mode in {'sum', 'mul', 'ave', 'cos'}:
@@ -364,8 +364,17 @@ class Merge(Layer):
 			return tuple(output_shape)
 		elif self.mode == 'join':
 			return None
+
 		elif self.mode == 'join_att':
 			return (input_shapes[0][0],input_shapes[1][1],input_shapes[0][2])
+
+		elif self.mode == 'join_dec':
+			if len(input_shapes[0]) == 3:
+				shape = input_shapes[0]
+			else:
+				shape = input_shapes[1]
+			return shape
+
 		elif self.mode == 'dot':
 			shape1 = list(input_shapes[0])
 			shape2 = list(input_shapes[1])
@@ -397,7 +406,7 @@ class Merge(Layer):
 		elif self.mode == 'concat':
 			inputs = [self.layers[i].get_output(train) for i in range(len(self.layers))]
 			return T.concatenate(inputs, axis=self.concat_axis)
-		elif self.mode == 'join' or self.mode == 'join_att':
+		elif self.mode == 'join' or self.mode == 'join_att' or self.mode == 'join_dec':
 			inputs = OrderedDict()
 			for i in range(len(self.layers)):
 				X = self.layers[i].get_output(train)
