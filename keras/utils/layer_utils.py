@@ -21,6 +21,9 @@ from ..layers.recurrentpp_soft import LSTMbase_soft, LSTMpp_soft, LSTMkernel_sof
 from ..layers.recurrentpp_maxout import LSTM_maxout
 from ..layers.attention import *
 from ..layers.recurrent_experts import ExpertI, ExpertII, ExpertIIgated
+from ..layers.decoder import LSTMdecoder, LSTMhdecoder, SplitDecoder
+from ..layers.experts import MoE
+from ..layers.dropmodality import DropModality
 
 def container_from_config(original_layer_dict, custom_objects={}):
     layer_dict = copy.deepcopy(original_layer_dict)

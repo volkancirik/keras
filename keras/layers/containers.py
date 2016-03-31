@@ -262,6 +262,7 @@ class Graph(Layer):
 					to_merge.append(self.inputs[n])
 				else:
 					raise Exception('Unknown identifier: ' + n)
+			###
 			merge = Merge(to_merge, mode=merge_mode, concat_axis=concat_axis, dot_axes=dot_axes)
 			layer.set_previous(merge)
 
@@ -401,31 +402,3 @@ class Graph(Layer):
 			nb_param = len(layer.get_weights())
 			layer.set_weights(weights[:nb_param])
 			weights = weights[nb_param:]
-
-	def drop_modality(self, layer, name, inputs=[], create_output=False):
-		if hasattr(layer, 'set_name'):
-			layer.set_name(name)
-		if name in self.namespace:
-			raise Exception('Duplicate node identifier: ' + name)
-
-		to_merge = []
-		for n in inputs:
-			if n in self.nodes:
-				to_merge.append(self.nodes[n])
-			elif n in self.inputs:
-				to_merge.append(self.inputs[n])
-			else:
-				raise Exception('Unknown identifier: ' + n)
-
-		merge = DropModality(to_merge)
-		layer.set_previous(merge)
-
-		self.namespace.add(name)
-		self.nodes[name] = layer
-		self.node_config.append({'name': name,
-								 'inputs': inputs,
-								 'create_output': create_output})
-
-		if create_output:
-			self.add_output(name, input=name)
-
