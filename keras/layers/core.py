@@ -355,8 +355,10 @@ class Merge(Layer):
 	@property
 	def output_shape(self):
 		input_shapes = [layer.output_shape for layer in self.layers]
+
 		if self.mode in ['sum', 'mul', 'ave']:
 			return input_shapes[0]
+
 		elif self.mode == 'concat':
 			output_shape = list(input_shapes[0])
 			for shape in input_shapes[1:]:
@@ -396,6 +398,7 @@ class Merge(Layer):
 		return self.params, self.regularizers, self.constraints, self.updates
 
 	def get_output(self, train=False):
+
 		if self.mode == 'sum' or self.mode == 'ave':
 			s = self.layers[0].get_output(train)
 			for i in range(1, len(self.layers)):

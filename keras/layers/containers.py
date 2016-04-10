@@ -262,7 +262,6 @@ class Graph(Layer):
 					to_merge.append(self.inputs[n])
 				else:
 					raise Exception('Unknown identifier: ' + n)
-			###
 			merge = Merge(to_merge, mode=merge_mode, concat_axis=concat_axis, dot_axes=dot_axes)
 			layer.set_previous(merge)
 
