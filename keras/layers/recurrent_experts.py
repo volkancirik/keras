@@ -17,7 +17,7 @@ class ExpertI(Recurrent):
 	'''
 	def __init__(self, output_dim, n_experts,
 				 init='glorot_uniform', inner_init='orthogonal',
-				 activation='sigmoid', inner_activation='hard_sigmoid',
+				 activation='tanh', inner_activation='hard_sigmoid',
 				 weights=None, truncate_gradient=-1, return_sequences=False,
 				 input_dim=None, input_length=None, go_backwards=False, **kwargs):
 		self.output_dim = output_dim
@@ -72,7 +72,7 @@ class ExpertI(Recurrent):
 		act = T.tensordot( h_mask_tm1 + xg_t, self.U_g , [[1],[2]])
 		gate = T.nnet.softmax(act.reshape((-1, act.shape[-1]))).reshape(act.shape)
 
-		h_t = (gate.reshape((-1,gate.shape[-1])) * E.reshape((-1,E.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2])
+		h_t = self.activation((gate.reshape((-1,gate.shape[-1])) * E.reshape((-1,E.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2]))
 
 		return h_t
 
@@ -113,16 +113,13 @@ class ExpertI(Recurrent):
 		base_config = super(ExpertI, self).get_config()
 		return dict(list(base_config.items()) + list(config.items()))
 
-
-
-
 class ExpertII(Recurrent):
 	'''
 	Expert Model I
 	'''
 	def __init__(self, output_dim, n_experts,
 				 init='glorot_uniform', inner_init='orthogonal',
-				 activation='sigmoid', inner_activation='hard_sigmoid',
+				 activation='tanh', inner_activation='hard_sigmoid',
 				 weights=None, truncate_gradient=-1, return_sequences=False,
 				 input_dim=None, input_length=None, go_backwards=False, **kwargs):
 		self.output_dim = output_dim
@@ -176,7 +173,7 @@ class ExpertII(Recurrent):
 		act = T.tensordot( h_mask_tm1 + xg_t, self.U_g , [[1],[2]])
 		gate = T.nnet.softmax(act.reshape((-1, act.shape[-1]))).reshape(act.shape)
 
-		h_t = (gate.reshape((-1,gate.shape[-1])) * E.reshape((-1,E.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2])
+		h_t = self.activation((gate.reshape((-1,gate.shape[-1])) * E.reshape((-1,E.shape[-1]))).sum(axis = 1).reshape(gate.shape[:2]))
 		e_t = E.dimshuffle(0,2,1)
 		return h_t, e_t
 
@@ -226,7 +223,7 @@ class ExpertIIgated(Recurrent):
 	'''
 	def __init__(self, output_dim, n_experts,
 				 init='glorot_uniform', inner_init='orthogonal',
-				 activation='sigmoid', inner_activation='hard_sigmoid',
+				 activation='tanh', inner_activation='hard_sigmoid',
 				 weights=None, truncate_gradient=-1, return_sequences=False,
 				 input_dim=None, input_length=None, go_backwards=False, **kwargs):
 		self.output_dim = output_dim
@@ -279,7 +276,7 @@ class ExpertIIgated(Recurrent):
 		gate = T.nnet.softmax(act.reshape((-1, act.shape[-1]))).reshape(act.shape)
 		E = (gate) * e_tm1.dimshuffle(0,2,1) + (1 - gate) * e_new
 
-		h_t = E.sum(axis = 2)
+		h_t = self.activation(E.sum(axis = 2))
 		e_t = E.dimshuffle(0,2,1)
 		return h_t, e_t
 

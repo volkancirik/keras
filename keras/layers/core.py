@@ -9,7 +9,7 @@ from collections import OrderedDict
 import copy
 
 from .. import activations, initializations, regularizers, constraints
-from ..utils.theano_utils import shared_zeros, floatX, ndim_tensor
+from ..utils.theano_utils import shared_zeros, floatX, ndim_tensor, alloc_zeros_matrix
 from ..utils.generic_utils import make_tuple
 from ..regularizers import ActivityRegularizer, Regularizer
 
@@ -290,7 +290,7 @@ class Merge(Layer):
 		if len(layers) < 2:
 			raise Exception("Please specify two or more input layers (or containers) to merge")
 
-		if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot', 'join_att', 'join_dec'}:
+		if mode not in {'sum', 'mul', 'concat', 'ave', 'join', 'cos', 'dot', 'join_att', 'join_dec', 'concat_td', 'join_att_dec'}:
 			raise Exception("Invalid merge mode: " + str(mode))
 
 		if mode in {'sum', 'mul', 'ave', 'cos'}:
@@ -333,6 +333,18 @@ class Merge(Layer):
 				raise Exception("'concat' mode can only merge layers with matching " +
 								"output shapes except for the concat axis. " +
 								"Layer shapes: %s" % ([l.output_shape for l in layers]))
+		elif mode == 'concat_td':
+			input_shapes = set()
+			for l in layers:
+				oshape = list(l.output_shape)
+				oshape.pop(concat_axis)
+				oshape = tuple(oshape)
+				input_shapes.add(oshape)
+			if len(input_shapes) != 2:
+				raise Exception("'concat' mode can only merge layers with matching " +
+								"output shapes except for the concat axis. " +
+								"Layer shapes: %s" % ([l.output_shape for l in layers]))
+
 
 		self.mode = mode
 		self.concat_axis = concat_axis
@@ -364,6 +376,10 @@ class Merge(Layer):
 			for shape in input_shapes[1:]:
 				output_shape[self.concat_axis] += shape[self.concat_axis]
 			return tuple(output_shape)
+
+		elif self.mode == 'concat_td':
+			return (input_shapes[0][0], input_shapes[0][1], input_shapes[0][2] + input_shapes[1][1])
+
 		elif self.mode == 'join':
 			return None
 
@@ -371,10 +387,19 @@ class Merge(Layer):
 			return (input_shapes[0][0],input_shapes[1][1],input_shapes[0][2])
 
 		elif self.mode == 'join_dec':
+			if input_shapes[0][-1] != None:
+				shape = tuple([None] + list(input_shapes[0]))
+			else:
+				shape = tuple([None] + list(input_shapes[1]))
+			return shape
+
+		elif self.mode == 'join_att_dec':
 			if len(input_shapes[0]) == 3:
 				shape = input_shapes[0]
-			else:
+			elif len(input_shapes[1]) == 3:
 				shape = input_shapes[1]
+			else:
+				shape = input_shapes[2]
 			return shape
 
 		elif self.mode == 'dot':
@@ -409,7 +434,25 @@ class Merge(Layer):
 		elif self.mode == 'concat':
 			inputs = [self.layers[i].get_output(train) for i in range(len(self.layers))]
 			return T.concatenate(inputs, axis=self.concat_axis)
-		elif self.mode == 'join' or self.mode == 'join_att' or self.mode == 'join_dec':
+
+		elif self.mode == 'concat_td':
+		 	input_shapes = [self.layers[0].get_output(train).shape for layer in self.layers]
+
+			def concat_td_step(x_t,o_tm1,ff_layer):
+				o_t = T.cast(T.concatenate([x_t,ff_layer],axis = -1),theano.config.floatX)
+				return o_t
+
+			outputs, _ = theano.scan(concat_td_step,
+									 sequences=[ self.layers[0].get_output(train).dimshuffle((1, 0, 2))],
+									 outputs_info=[
+										 T.unbroadcast(alloc_zeros_matrix(input_shapes[0][0], input_shapes[0][2] + input_shapes[1][1]),1),
+									],
+									 non_sequences=[self.layers[1].get_output(train)],
+									 truncate_gradient=False,
+									 go_backwards=False)
+			return outputs.dimshuffle((1, 0, 2))
+
+		elif self.mode == 'join' or self.mode == 'join_att' or self.mode == 'join_dec' or self.mode == 'concat_td' or self.mode == 'join_att_dec':
 			inputs = OrderedDict()
 			for i in range(len(self.layers)):
 				X = self.layers[i].get_output(train)
@@ -418,6 +461,7 @@ class Merge(Layer):
 				else:
 					inputs[self.layers[i].name] = X
 			return inputs
+
 		elif self.mode == 'mul':
 			s = self.layers[0].get_output(train)
 			for i in range(1, len(self.layers)):
