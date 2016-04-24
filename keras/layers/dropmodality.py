@@ -23,6 +23,7 @@ class DropModality(Layer):
 		self.input_shapes = input_shapes
 
 	def get_output(self, train=False):
+
 		X = self.get_input(train)
 
 		full = T.ones_like(X)
@@ -33,10 +34,23 @@ class DropModality(Layer):
 			idx = 0
 			for j in xrange(len(self.input_shapes)):
 				if i == j:
-					mask = T.set_subtensor(mask[:,:,idx : idx+ self.input_shapes[j]], 0)
+					try:
+						ishape = len(self.input_shapes[0])
+					except:
+						ishape = [1]
+						pass
+					if len(ishape)  == 3:
+						mask = T.set_subtensor(mask[:,:,idx : idx+ self.input_shapes[j]], 0)
+					elif len(ishape) == 2:
+						mask = T.set_subtensor(mask[:,idx : idx+ self.input_shapes[j]], 0)
+					elif len(ishape) == 1:
+						mask = T.set_subtensor(mask[idx : idx+ self.input_shapes[j]], 0)
+					else:
+						raise NotImplementedError()
 				idx =  idx + self.input_shapes[j]
 			masks += [mask]
 		masked = T.stack(masks)
+
 		if train:
 			index  = self.trng.random_integers(size=(1,),low = 0, high = len(masks)-1)[0]
 		else:
