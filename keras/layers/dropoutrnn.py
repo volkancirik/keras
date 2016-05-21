@@ -13,6 +13,170 @@ from ..regularizers import l2
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
+class DropoutbiLSTM(Recurrent):
+	def __init__(self, input_dim, output_dim = 128, internal_dim=64,
+				 init='glorot_uniform', inner_init='orthogonal', forget_bias_init='one',
+				 activation='tanh', inner_activation='hard_sigmoid',
+				 weights=None, truncate_gradient=-1, return_sequences=False,
+				 W_regularizer = l2(0.0001), U_regularizer = l2(0.0001), b_regularizer = l2(0.0001),
+				 dropout = 0.5):
+
+		super(DropoutbiLSTM, self).__init__()
+
+		self.srng = RandomStreams(seed=np.random.randint(10e6))
+		self.input_dim = input_dim
+		self.internal_dim = output_dim / 2
+		self.output_dim = output_dim
+		self.truncate_gradient = truncate_gradient
+		self.return_sequences = return_sequences
+		self.dropout = dropout
+
+		self.init = initializations.get(init)
+		self.inner_init = initializations.get(inner_init)
+		self.forget_bias_init = initializations.get(forget_bias_init)
+		self.activation = activations.get(activation)
+		self.inner_activation = activations.get(inner_activation)
+		self.input = T.tensor3()
+
+		self.W_i = self.init((self.input_dim, self.internal_dim))
+		self.U_i = self.inner_init((self.internal_dim, self.internal_dim))
+		self.b_i = shared_zeros((self.internal_dim))
+
+		self.W_f = self.init((self.input_dim, self.internal_dim))
+		self.U_f = self.inner_init((self.internal_dim, self.internal_dim))
+		self.b_f = self.forget_bias_init((self.internal_dim))
+
+		self.W_c = self.init((self.input_dim, self.internal_dim))
+		self.U_c = self.inner_init((self.internal_dim, self.internal_dim))
+		self.b_c = shared_zeros((self.internal_dim))
+
+		self.W_o = self.init((self.input_dim, self.internal_dim))
+		self.U_o = self.inner_init((self.internal_dim, self.internal_dim))
+		self.b_o = shared_zeros((self.internal_dim))
+
+		self.params = [
+			self.W_i, self.U_i, self.b_i,
+			self.W_c, self.U_c, self.b_c,
+			self.W_f, self.U_f, self.b_f,
+			self.W_o, self.U_o, self.b_o,
+		]
+
+		self.regularizers = []
+		def appendRegulariser(input_regulariser, param, regularizers_list):
+			regulariser = regularizers.get(input_regulariser)
+			if regulariser:
+				regulariser.set_param(param)
+				regularizers_list.append(regulariser)
+
+		self.W_regularizer = W_regularizer
+		appendRegulariser(self.W_regularizer, self.W_i, self.regularizers)
+		appendRegulariser(self.W_regularizer, self.W_f, self.regularizers)
+		appendRegulariser(self.W_regularizer, self.W_c, self.regularizers)
+		appendRegulariser(self.W_regularizer, self.W_o, self.regularizers)
+
+		self.U_regularizer = U_regularizer
+		appendRegulariser(self.U_regularizer, self.U_i, self.regularizers)
+		appendRegulariser(self.U_regularizer, self.U_f, self.regularizers)
+		appendRegulariser(self.U_regularizer, self.U_c, self.regularizers)
+		appendRegulariser(self.U_regularizer, self.U_o, self.regularizers)
+
+		self.b_regularizer = b_regularizer
+		appendRegulariser(self.b_regularizer, self.b_i, self.regularizers)
+		appendRegulariser(self.b_regularizer, self.b_f, self.regularizers)
+		appendRegulariser(self.b_regularizer, self.b_c, self.regularizers)
+		appendRegulariser(self.b_regularizer, self.b_o, self.regularizers)
+
+		if weights is not None:
+			self.set_weights(weights)
+
+	def _step(self,
+			  xi_t, xf_t, xo_t, xc_t, mask_tm1,
+			  h_tm1, c_tm1, i_tm1, f_tm1, o_tm1,
+			  u_i, u_f, u_o, u_c, B_U):
+		h_mask_tm1 = mask_tm1 * h_tm1
+		c_mask_tm1 = mask_tm1 * c_tm1
+
+		i_t = self.inner_activation(xi_t + T.dot(h_mask_tm1 * B_U[0], u_i))
+		f_t = self.inner_activation(xf_t + T.dot(h_mask_tm1 * B_U[1], u_f))
+		c_t = f_t * c_mask_tm1 + i_t * self.activation(xc_t + T.dot(h_mask_tm1 * B_U[2], u_c))
+		o_t = self.inner_activation(xo_t + T.dot(h_mask_tm1 * B_U[3], u_o))
+		h_t = o_t * self.activation(c_t)
+		return h_t, c_t, i_t, f_t, o_t
+
+	def get_output(self, train=False):
+		X = self.get_input(train)
+		padded_mask = self.get_padded_shuffled_mask(train, X, pad=1)
+		X = X.dimshuffle((1, 0, 2))
+
+		retain_prob_W = 1. - self.dropout
+		retain_prob_U = 1. - self.dropout
+		if train:
+			B_W = self.srng.binomial((4, X.shape[1], self.input_dim),
+				p=retain_prob_W, dtype=theano.config.floatX)
+			B_U = self.srng.binomial((4, X.shape[1], self.internal_dim),
+				p=retain_prob_U, dtype=theano.config.floatX)
+		else:
+			B_W = np.ones(4, dtype=theano.config.floatX) * retain_prob_W
+			B_U = np.ones(4, dtype=theano.config.floatX) * retain_prob_U
+
+		xi = T.dot(X * B_W[0], self.W_i) + self.b_i
+		xf = T.dot(X * B_W[1], self.W_f) + self.b_f
+		xc = T.dot(X * B_W[2], self.W_c) + self.b_c
+		xo = T.dot(X * B_W[3], self.W_o) + self.b_o
+
+		[fw_outputs, fw_memories, fw_gate_i, fw_gate_f, fw_gate_o], updates = theano.scan(
+			self._step,
+			sequences=[xi, xf, xo, xc, padded_mask],
+			outputs_info=[
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1)
+			],
+			non_sequences=[self.U_i, self.U_f, self.U_o, self.U_c, B_U],
+			truncate_gradient=self.truncate_gradient)
+
+		[bw_outputs, bw_memories, bw_gate_i, bw_gate_f, bw_gate_o], updates = theano.scan(
+			self._step,
+			sequences=[xi, xf, xo, xc, padded_mask],
+			outputs_info=[
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.internal_dim), 1)
+			],
+			non_sequences=[self.U_i, self.U_f, self.U_o, self.U_c, B_U],
+			truncate_gradient=self.truncate_gradient,
+			go_backwards = True)
+
+		outputs = T.concatenate([fw_outputs, bw_outputs], axis = 2)
+
+		if self.return_sequences:
+			return outputs.dimshuffle((1, 0, 2))
+		return outputs[-1]
+
+	def get_config(self):
+		return {"name": self.__class__.__name__,
+				"input_dim": self.input_dim,
+				"internal_dim": self.output_dim,
+				"internal_dim": self.internal_dim,
+				"init": self.init.__name__,
+				"inner_init": self.inner_init.__name__,
+				"forget_bias_init": self.forget_bias_init.__name__,
+				"activation": self.activation.__name__,
+				"inner_activation": self.inner_activation.__name__,
+				"truncate_gradient": self.truncate_gradient,
+				"return_sequences": self.return_sequences,
+				"W_regularizer": self.W_regularizer.get_config() if self.W_regularizer else None,
+				"U_regularizer": self.U_regularizer.get_config() if self.b_regularizer else None,
+				"b_regularizer": self.b_regularizer.get_config() if self.b_regularizer else None,
+				"dropout": self.dropout
+				}
+
+
+
 class DropoutGRU(Recurrent):
 	def __init__(self, input_dim, output_dim=128,
 				 init='glorot_uniform', inner_init='orthogonal',
@@ -342,7 +506,7 @@ class DropoutLSTM(Recurrent):
 
 	def _step(self,
 			  xi_t, xf_t, xo_t, xc_t, mask_tm1,
-			  h_tm1, c_tm1,
+			  h_tm1, c_tm1, i_tm1, f_tm1, o_tm1,
 			  u_i, u_f, u_o, u_c, B_U):
 		h_mask_tm1 = mask_tm1 * h_tm1
 		c_mask_tm1 = mask_tm1 * c_tm1
@@ -352,7 +516,7 @@ class DropoutLSTM(Recurrent):
 		c_t = f_t * c_mask_tm1 + i_t * self.activation(xc_t + T.dot(h_mask_tm1 * B_U[2], u_c))
 		o_t = self.inner_activation(xo_t + T.dot(h_mask_tm1 * B_U[3], u_o))
 		h_t = o_t * self.activation(c_t)
-		return h_t, c_t
+		return h_t, c_t, i_t, f_t, o_t
 
 	def get_output(self, train=False):
 		X = self.get_input(train)
@@ -375,10 +539,13 @@ class DropoutLSTM(Recurrent):
 		xc = T.dot(X * B_W[2], self.W_c) + self.b_c
 		xo = T.dot(X * B_W[3], self.W_o) + self.b_o
 
-		[outputs, memories], updates = theano.scan(
+		[outputs, memories, gate_i, gate_f, gate_o], updates = theano.scan(
 			self._step,
 			sequences=[xi, xf, xo, xc, padded_mask],
 			outputs_info=[
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
 				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
 				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1)
 			],
@@ -388,6 +555,42 @@ class DropoutLSTM(Recurrent):
 		if self.return_sequences:
 			return outputs.dimshuffle((1, 0, 2))
 		return outputs[-1]
+
+	def get_details(self, train=False):
+		X = self.get_input(train)
+		padded_mask = self.get_padded_shuffled_mask(train, X, pad=1)
+		X = X.dimshuffle((1, 0, 2))
+
+		retain_prob_W = 1. - self.dropout
+		retain_prob_U = 1. - self.dropout
+		if train:
+			B_W = self.srng.binomial((4, X.shape[1], self.input_dim),
+				p=retain_prob_W, dtype=theano.config.floatX)
+			B_U = self.srng.binomial((4, X.shape[1], self.output_dim),
+				p=retain_prob_U, dtype=theano.config.floatX)
+		else:
+			B_W = np.ones(4, dtype=theano.config.floatX) * retain_prob_W
+			B_U = np.ones(4, dtype=theano.config.floatX) * retain_prob_U
+
+		xi = T.dot(X * B_W[0], self.W_i) + self.b_i
+		xf = T.dot(X * B_W[1], self.W_f) + self.b_f
+		xc = T.dot(X * B_W[2], self.W_c) + self.b_c
+		xo = T.dot(X * B_W[3], self.W_o) + self.b_o
+
+		[outputs, memories, gate_i, gate_f, gate_o], updates = theano.scan(
+			self._step,
+			sequences=[xi, xf, xo, xc, padded_mask],
+			outputs_info=[
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1),
+				T.unbroadcast(alloc_zeros_matrix(X.shape[1], self.output_dim), 1)
+			],
+			non_sequences=[self.U_i, self.U_f, self.U_o, self.U_c, B_U],
+			truncate_gradient=self.truncate_gradient)
+
+		return outputs.dimshuffle((1, 0, 2)), memories.dimshuffle((1, 0, 2)), gate_i.dimshuffle((1, 0, 2)), gate_f.dimshuffle((1, 0, 2)), gate_o.dimshuffle((1, 0, 2))
 
 	def get_config(self):
 		return {"name": self.__class__.__name__,

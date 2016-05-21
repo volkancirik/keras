@@ -25,7 +25,7 @@ from ..layers.decoder import LSTMdecoder, LSTMhdecoder, SplitDecoder, LSTMAttent
 
 from ..layers.dropmodality import DropModality
 from ..layers.averagelayer import Average
-from ..layers.dropoutrnn import DropoutLSTM, DropoutGRU
+from ..layers.dropoutrnn import DropoutLSTM, DropoutGRU, DropoutbiLSTM
 
 def container_from_config(original_layer_dict, custom_objects={}):
     layer_dict = copy.deepcopy(original_layer_dict)
