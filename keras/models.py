@@ -578,7 +578,7 @@ class Sequential(Model, containers.Sequential):
 			for n, param in enumerate(weights):
 				param_name = 'param_{}'.format(n)
 				n_parameters += reduce(lambda x,y: x*y, param.shape)
-#				print(param.shape)
+				#print(param.shape)
 		return n_parameters
 
 class Graph(Model, containers.Graph):
@@ -740,7 +740,7 @@ class Graph(Model, containers.Graph):
 		for n, param in enumerate(weights):
 			param_name = 'param_{}'.format(n)
 			n_parameters += reduce(lambda x,y: x*y, param.shape)
-#			print(param.shape)
+			#print(param.shape)
 		return n_parameters
 
 	def dump_params(self, filepath):
