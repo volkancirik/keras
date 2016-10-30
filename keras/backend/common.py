@@ -16,7 +16,6 @@ def epsilon():
     '''
     return _EPSILON
 
-
 def set_epsilon(e):
     '''Sets the value of the fuzz
     factor used in numeric expressions.
